@@ -95,9 +95,6 @@ h2{margin:0 0 15px;font-size:.95rem;font-weight:600;text-transform:uppercase;let
       </div>
       <div class="p-item" style="text-align:right"><span class="p-label">Sesión</span><span class="p-value" id="sessionTime">--:--:--</span></div>
     </div>
-    <div style="font-size:.8rem;color:#64748b;margin:-12px 0 18px;padding:9px 12px;background:#fff;border:1px solid #e2e8f0;border-radius:6px">
-      Visualización en actualización continua: señales sintéticas generadas localmente por el código; no son lecturas de sensores ni datos clínicos reales.
-    </div>
 
     <div id="instrucciones" class="panel">
       <h1 style="font-size:1.5rem;margin:0 0 25px;text-transform:uppercase;letter-spacing:1px">Protocolo de Operación</h1>
@@ -165,14 +162,13 @@ h2{margin:0 0 15px;font-size:.95rem;font-weight:600;text-transform:uppercase;let
 
 <script>
 /* ============ CONFIGURACIÓN ============
-   Las cinco señales se generan localmente mediante las funciones de este archivo.
-   No se consulta ninguna fuente externa ni se descargan señales de internet.
-   IMPORTANTE: son señales sintéticas de demostración, no mediciones de sensores.
+   Se utilizan únicamente las cinco señales definidas en este archivo.
+   Se generan una sola vez al abrir la página y permanecen estáticas.
+   No hay conexión a Firebase ni a fuentes externas de datos.
 ==========================================*/
 const SAMPLE_RATE = 200;
 const SECONDS_TO_SHOW = 15;
 const BUFFER_SIZE = SAMPLE_RATE * SECONDS_TO_SHOW;
-const REFRESH_INTERVAL_MS = 1000;
 
 let charts = {}, globalData = {};
 
@@ -182,15 +178,15 @@ const PASOS = [
  ['Encendido','Encienda el switch de baterías y el de alimentación.'],
  ['Periféricos','Conecte HDMI, Mouse y Teclado a las entradas del dispositivo.'],
  ['Interfaz','Espere a que cargue el sistema.'],
- ['Conexión','Esta visualización local no requiere conexión a internet ni a una fuente externa de señales.'],
+ ['Conexión','La página muestra las señales definidas localmente en el código y no requiere conexión a Firebase.'],
  ['Terminal','Abra la terminal situada en la esquina superior izquierda.'],
  ['Ruta','Escriba: <b>cd Desktop/EAP</b> y presione enter.'],
  ['Paciente','Coloque electrodos y dedales según manual de usuario.'],
- ['Ejecutar','Inicie la interfaz web. Las señales locales de demostración comenzarán a mostrarse automáticamente.'],
- ['Visualizar','La página muestra una ventana móvil de 15 segundos y actualiza las señales automáticamente.'],
- ['Confirmación','Verifique que las cinco señales locales se estén actualizando en la interfaz.'],
- ['Actualización','La interfaz actualiza automáticamente las señales locales cada segundo.'],
- ['Datos','Presione Exportar CSV para descargar las cinco señales locales mostradas en la página.'],
+ ['Visualización','Al abrir la página se cargan una sola vez las cinco señales ECG y PPG definidas en el código.'],
+ ['Señales','Las gráficas permanecen estáticas durante toda la sesión; no se actualizan automáticamente.'],
+ ['Verificación','Compruebe que aparezcan las cinco señales: ECG, PPG índice izquierdo, PPG índice derecho, PPG Hallux izquierdo y PPG Hallux derecho.'],
+ ['Datos','Las señales corresponden a las funciones incluidas en este archivo HTML; no se descargan datos externos.'],
+ ['Datos','Presionar el botón CSV en la esquina superior derecha de la página en caso de querer descargar los datos adquiridos en formato excel.'],
  ['Imágenes','Presionar el símbolo de la cámara en la esquina superior derecha de las gráficas que se deseen descargar.']
 ];
 document.getElementById('stepsBox').innerHTML = PASOS.map((p,i)=>
@@ -316,19 +312,19 @@ const sliceData=a=>a?a.slice(-BUFFER_SIZE):[];
 function setBadge(){
   const b=document.getElementById('modeBadge');
   b.className='badge live';
-  b.innerText='EN VIVO · DATOS LOCALES';
+  b.innerText='SEÑALES ESTÁTICAS';
 }
 
-/* ============ FLUJO LOCAL DE SEÑALES ============
-   Se generan CH1–CH5 con las funciones simECG() y simPPG()
-   definidas arriba. La gráfica se actualiza periódicamente.
-   Esto NO representa adquisición física en tiempo real.
-================================================= */
+/* ============ CARGA DE SEÑALES ESTÁTICAS ============
+   Se ejecuta una sola vez. Las señales ECG y PPG se generan
+   con las funciones originales simECG() y simPPG() de este archivo.
+   No se vuelven a generar ni actualizar mientras la página esté abierta.
+===================================================== */
 function loadData(){
   setBadge();
-  dibujar(generarSimulacion());
+  const datos=generarSimulacion();
+  dibujar(datos);
 }
-
 
 function dibujar(d){
   globalData=d;
@@ -374,7 +370,6 @@ function renderChart(id,labels,datasets){
 }
 
 loadData();
-setInterval(loadData, REFRESH_INTERVAL_MS);
 </script>
 </body>
 </html>
