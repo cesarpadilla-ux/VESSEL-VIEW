@@ -14,7 +14,7 @@ header{background:rgba(255,255,255,.95);border-bottom:1px solid var(--bd);paddin
 .brand span{color:var(--ac);font-weight:600}
 .live-clock{font-family:var(--mono);color:var(--t2);font-size:.9rem;border-left:2px solid var(--bd);padding-left:20px}
 .badge{font-size:.7rem;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:4px 10px;border-radius:20px;border:1px solid var(--bd);color:var(--t2)}
-.badge.sim{background:#fef3c7;color:#92400e;border-color:#fcd34d}
+
 .badge.live{background:var(--acd);color:var(--ac);border-color:var(--ac)}
 .header-controls{display:flex;gap:10px;align-items:center}
 .menu-toggle{background:none;border:none;color:var(--t1);font-size:24px;cursor:pointer;display:none;margin-right:15px}
@@ -66,7 +66,6 @@ h2{margin:0 0 15px;font-size:.95rem;font-weight:600;text-transform:uppercase;let
   </div>
   <div class="header-controls">
     <span class="badge" id="modeBadge">Cargando…</span>
-    <button class="btn" onclick="regenerate()" id="regenBtn" style="display:none">↻ Nueva simulación</button>
     <button class="btn dark" onclick="downloadCSV()">⬇ Exportar CSV</button>
   </div>
 </header>
@@ -95,6 +94,9 @@ h2{margin:0 0 15px;font-size:.95rem;font-weight:600;text-transform:uppercase;let
         <div class="p-item"><span class="p-label">ADC</span><span class="p-value">16-bit</span></div>
       </div>
       <div class="p-item" style="text-align:right"><span class="p-label">Sesión</span><span class="p-value" id="sessionTime">--:--:--</span></div>
+    </div>
+    <div style="font-size:.8rem;color:#64748b;margin:-12px 0 18px;padding:9px 12px;background:#fff;border:1px solid #e2e8f0;border-radius:6px">
+      Visualización en actualización continua: señales sintéticas generadas localmente por el código; no son lecturas de sensores ni datos clínicos reales.
     </div>
 
     <div id="instrucciones" class="panel">
@@ -163,20 +165,14 @@ h2{margin:0 0 15px;font-size:.95rem;font-weight:600;text-transform:uppercase;let
 
 <script>
 /* ============ CONFIGURACIÓN ============
-   MODO:  'auto'     -> intenta Firebase; si falla o no hay datos, usa simulación (respaldo)
-          'firebase' -> solo Firebase
-          'sim'      -> solo simulación
-   También se puede forzar desde la URL:  ?sim=1  (simulación)  o  ?live=1  (firebase)
+   Las cinco señales se generan localmente mediante las funciones de este archivo.
+   No se consulta ninguna fuente externa ni se descargan señales de internet.
+   IMPORTANTE: son señales sintéticas de demostración, no mediciones de sensores.
 ==========================================*/
-let MODO = 'auto';
-const FIREBASE_URL = 'https://practicumii-a9956-default-rtdb.firebaseio.com/ad7606.json';
 const SAMPLE_RATE = 200;
 const SECONDS_TO_SHOW = 15;
 const BUFFER_SIZE = SAMPLE_RATE * SECONDS_TO_SHOW;
-
-const qs = new URLSearchParams(location.search);
-if (qs.has('sim')) MODO = 'sim';
-if (qs.has('live')) MODO = 'firebase';
+const REFRESH_INTERVAL_MS = 1000;
 
 let charts = {}, globalData = {};
 
@@ -186,15 +182,15 @@ const PASOS = [
  ['Encendido','Encienda el switch de baterías y el de alimentación.'],
  ['Periféricos','Conecte HDMI, Mouse y Teclado a las entradas del dispositivo.'],
  ['Interfaz','Espere a que cargue el sistema.'],
- ['Internet','En el ícono de Wi-fi en la esquina superior derecha conéctese a una red, o en caso de no tener acceso puede conectar un cable LAN al lado del puerto USB.'],
+ ['Conexión','Esta visualización local no requiere conexión a internet ni a una fuente externa de señales.'],
  ['Terminal','Abra la terminal situada en la esquina superior izquierda.'],
  ['Ruta','Escriba: <b>cd Desktop/EAP</b> y presione enter.'],
  ['Paciente','Coloque electrodos y dedales según manual de usuario.'],
- ['Ejecutar','Escriba seguido en la terminal: <b>python3 eap.py</b> y presione enter.'],
- ['Medir','Adquiera datos mínimo durante 15 segundos, luego presione "detener".'],
- ['Confirmación','Verifique mensaje de transferencia exitosa. En caso de recibir mensaje de error, verificar conexión a internet.'],
- ['Refrescar','Actualice esta página para ver los nuevos datos.'],
- ['Datos','Presionar el botón CSV en la esquina superior derecha de la página en caso de querer descargar los datos adquiridos en formato excel.'],
+ ['Ejecutar','Inicie la interfaz web. Las señales locales de demostración comenzarán a mostrarse automáticamente.'],
+ ['Visualizar','La página muestra una ventana móvil de 15 segundos y actualiza las señales automáticamente.'],
+ ['Confirmación','Verifique que las cinco señales locales se estén actualizando en la interfaz.'],
+ ['Actualización','La interfaz actualiza automáticamente las señales locales cada segundo.'],
+ ['Datos','Presione Exportar CSV para descargar las cinco señales locales mostradas en la página.'],
  ['Imágenes','Presionar el símbolo de la cámara en la esquina superior derecha de las gráficas que se deseen descargar.']
 ];
 document.getElementById('stepsBox').innerHTML = PASOS.map((p,i)=>
@@ -317,33 +313,22 @@ function updateComparisonStats(p,a,b){
 
 const sliceData=a=>a?a.slice(-BUFFER_SIZE):[];
 
-function setBadge(sim){
+function setBadge(){
   const b=document.getElementById('modeBadge');
-  b.className='badge '+(sim?'sim':'live');
-  b.innerText=sim?'Modo simulación':'Datos en vivo';
-  document.getElementById('regenBtn').style.display=sim?'flex':'none';
+  b.className='badge live';
+  b.innerText='EN VIVO · DATOS LOCALES';
 }
 
-/* ============ CARGA DE DATOS ============ */
-async function obtenerFirebase(){
-  const res=await fetch(FIREBASE_URL);
-  const d=await res.json();
-  if(!d||!d.CH1||d.CH1.length<10)throw new Error('Firebase sin datos');
-  return {CH1:sliceData(d.CH1),CH2:sliceData(d.CH2),CH3:sliceData(d.CH3),CH4:sliceData(d.CH4),CH5:sliceData(d.CH5)};
+/* ============ FLUJO LOCAL DE SEÑALES ============
+   Se generan CH1–CH5 con las funciones simECG() y simPPG()
+   definidas arriba. La gráfica se actualiza periódicamente.
+   Esto NO representa adquisición física en tiempo real.
+================================================= */
+function loadData(){
+  setBadge();
+  dibujar(generarSimulacion());
 }
 
-async function loadData(){
-  let datos=null,simulado=false;
-  if(MODO!=='sim'){
-    try{datos=await obtenerFirebase();}
-    catch(e){console.warn('Firebase no disponible:',e.message);}
-  }
-  if(!datos&&MODO!=='firebase'){datos=generarSimulacion();simulado=true;}
-  if(!datos){setBadge(false);document.getElementById('modeBadge').innerText='Sin datos';return;}
-  setBadge(simulado);
-  dibujar(datos);
-}
-function regenerate(){dibujar(generarSimulacion());}
 
 function dibujar(d){
   globalData=d;
@@ -389,6 +374,7 @@ function renderChart(id,labels,datasets){
 }
 
 loadData();
+setInterval(loadData, REFRESH_INTERVAL_MS);
 </script>
 </body>
 </html>
