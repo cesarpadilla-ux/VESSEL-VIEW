@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Vessel View ECG / PPG</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+<style>
+:root{--bg:#f8f9fa;--card:#fff;--stats:#f3f4f6;--t1:#1f2937;--t2:#64748b;--t3:#94a3b8;--ac:#059669;--acd:rgba(5,150,105,.1);--bd:#e2e8f0;--ui:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;--mono:Consolas,Monaco,monospace;--sh:0 2px 4px rgba(0,0,0,.05)}
+body{background:var(--bg);color:var(--t1);font-family:var(--ui);margin:0;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+header{background:rgba(255,255,255,.95);border-bottom:1px solid var(--bd);padding:0 25px;height:60px;display:flex;align-items:center;justify-content:space-between;position:fixed;top:0;left:0;width:100%;z-index:1000;box-sizing:border-box;backdrop-filter:blur(8px)}
+.brand-area{display:flex;align-items:center;gap:20px}
+.brand{font-size:1.1rem;font-weight:700;letter-spacing:1px;text-transform:uppercase}
+.brand span{color:var(--ac);font-weight:600}
+.live-clock{font-family:var(--mono);color:var(--t2);font-size:.9rem;border-left:2px solid var(--bd);padding-left:20px}
+.badge{font-size:.7rem;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:4px 10px;border-radius:20px;border:1px solid var(--bd);color:var(--t2)}
+.badge.sim{background:#fef3c7;color:#92400e;border-color:#fcd34d}
+.badge.live{background:var(--acd);color:var(--ac);border-color:var(--ac)}
+.header-controls{display:flex;gap:10px;align-items:center}
+.menu-toggle{background:none;border:none;color:var(--t1);font-size:24px;cursor:pointer;display:none;margin-right:15px}
+.btn{border:1px solid var(--bd);background:#fff;color:var(--t2);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.75rem;font-weight:600;text-transform:uppercase}
+.btn:hover{background:#f8fafc;color:var(--t1)}
+.btn.dark{background:var(--t1);color:#fff;border-color:var(--t1)}
+.btn.dark:hover{background:#000}
+.main{display:flex;margin-top:60px;height:calc(100vh - 60px);width:100%}
+.menu{width:250px;background:#fff;padding:30px 15px;overflow-y:auto;border-right:1px solid var(--bd);flex-shrink:0;display:flex;flex-direction:column;gap:5px;transition:transform .3s}
+.menu-title{font-size:.7rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--t3);margin:20px 15px 8px;font-weight:700}
+.menu-title:first-child{margin-top:0}
+.menu button{width:100%;padding:10px 15px;border:none;background:transparent;cursor:pointer;font-size:.85rem;border-radius:6px;font-weight:500;color:var(--t2);text-align:left}
+.menu button:hover{background:#f1f5f9;color:var(--t1)}
+.menu button.active{background:var(--acd);color:var(--ac);font-weight:700;border-left:3px solid var(--ac)}
+.content{flex-grow:1;padding:30px;overflow-y:auto}
+.patient-bar{display:flex;justify-content:space-between;align-items:center;background:var(--card);border:1px solid var(--bd);padding:15px 25px;border-radius:8px;margin-bottom:25px;box-shadow:var(--sh)}
+.patient-info{display:flex;gap:50px;flex-wrap:wrap}
+.p-item{display:flex;flex-direction:column;gap:2px}
+.p-label{font-size:.65rem;color:var(--t3);text-transform:uppercase;letter-spacing:1px;font-weight:600}
+.p-value{font-size:.95rem;font-weight:600;font-family:var(--mono)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(450px,1fr));gap:20px}
+.card{background:var(--card);padding:20px;border-radius:8px;margin-bottom:20px;border:1px solid var(--bd);box-shadow:var(--sh);display:flex;flex-direction:column}
+.grid .card{margin-bottom:0}
+h2{margin:0 0 15px;font-size:.95rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--bd);padding-bottom:10px}
+.stats{display:flex;gap:30px;background:var(--stats);padding:10px 15px;border-radius:6px;margin-bottom:15px;border:1px solid var(--bd)}
+.stat{display:flex;flex-direction:column;min-width:60px}
+.stat-label{font-size:.65rem;color:var(--t3);text-transform:uppercase}
+.stat-val{font-family:var(--mono);font-size:1.1rem;font-weight:600}
+.cam{background:#fff;border:1px solid var(--bd);color:var(--t2);border-radius:4px;cursor:pointer;padding:4px 8px}
+.cam:hover{color:var(--ac);border-color:var(--ac)}
+.steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:15px}
+.step{background:var(--card);border:1px solid var(--bd);border-radius:6px;padding:20px;display:flex;flex-direction:column;gap:10px;box-shadow:var(--sh)}
+.step-h{display:flex;align-items:center;gap:12px}
+.num{font-family:var(--mono);font-weight:700;color:var(--ac);background:var(--acd);width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%}
+.step-t{font-size:.9rem;font-weight:700;text-transform:uppercase}
+.step-d{font-size:.9rem;color:var(--t2);line-height:1.5}
+.ch{position:relative;height:280px;width:100%}
+.ch-l{position:relative;height:450px;width:100%}
+@media print{.menu,header,.menu-toggle,.cam{display:none!important}.main{margin:0;height:auto;display:block}.content{overflow:visible}.grid{display:block}}
+@media (max-width:768px){.menu-toggle{display:block}.menu{position:fixed;left:0;top:60px;height:calc(100vh - 60px);z-index:999;transform:translateX(-100%)}.menu.open{transform:none}.content{padding:15px}.grid{grid-template-columns:1fr}.ch-l{height:300px}.patient-bar,.live-clock{display:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand-area">
+    <button class="menu-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
+    <div class="brand">Vessel <span>View</span></div>
+    <div class="live-clock" id="headerClock">--:--:--</div>
+  </div>
+  <div class="header-controls">
+    <span class="badge" id="modeBadge">Cargando…</span>
+    <button class="btn" onclick="regenerate()" id="regenBtn" style="display:none">↻ Nueva simulación</button>
+    <button class="btn dark" onclick="downloadCSV()">⬇ Exportar CSV</button>
+  </div>
+</header>
+
+<div class="main">
+  <div class="menu" id="sidebar">
+    <div class="menu-title">Principal</div>
+    <button onclick="showPanel('instrucciones',this)" class="active">Protocolo</button>
+    <button onclick="showPanel('all_view',this)">Resumen General</button>
+    <div class="menu-title">Señales</div>
+    <button onclick="showPanel('ecg',this)">ECG</button>
+    <button onclick="showPanel('ppg_view',this)">Monitor PPG</button>
+    <div class="menu-title">Detalle</div>
+    <button onclick="showPanel('ppg_manos',this)">Manos</button>
+    <button onclick="showPanel('ppg_pies',this)">Pies</button>
+    <div class="menu-title">Comparación</div>
+    <button onclick="showPanel('comp_manos',this)">Manos</button>
+    <button onclick="showPanel('comp_pies',this)">Pies</button>
+  </div>
+
+  <div class="content">
+    <div class="patient-bar">
+      <div class="patient-info">
+        <div class="p-item"><span class="p-label">Frecuencia Muestreo</span><span class="p-value">200 Hz</span></div>
+        <div class="p-item"><span class="p-label">Ventana Tiempo</span><span class="p-value">15 s</span></div>
+        <div class="p-item"><span class="p-label">ADC</span><span class="p-value">16-bit</span></div>
+      </div>
+      <div class="p-item" style="text-align:right"><span class="p-label">Sesión</span><span class="p-value" id="sessionTime">--:--:--</span></div>
+    </div>
+
+    <div id="instrucciones" class="panel">
+      <h1 style="font-size:1.5rem;margin:0 0 25px;text-transform:uppercase;letter-spacing:1px">Protocolo de Operación</h1>
+      <div class="steps" id="stepsBox"></div>
+    </div>
+
+    <div id="ecg" class="panel" style="display:none">
+      <div class="card"><h2><span>Señal ECG</span><button class="cam" onclick="downloadImage('ecgChart')">📷</button></h2>
+        <div class="stats"><div class="stat"><span class="stat-label">Máximo</span><span class="stat-val" id="ecg_max">--</span></div><div class="stat"><span class="stat-label">Mínimo</span><span class="stat-val" id="ecg_min">--</span></div><div class="stat"><span class="stat-label">Vpp</span><span class="stat-val" id="ecg_vpp">--</span></div></div>
+        <div class="ch-l"><canvas id="ecgChart"></canvas></div></div>
+    </div>
+
+    <div id="ppg_manos" class="panel" style="display:none">
+      <div class="card"><h2><span>PPG Índice Izquierdo</span><button class="cam" onclick="downloadImage('ppg1')">📷</button></h2>
+        <div class="stats"><div class="stat"><span class="stat-label">Máximo</span><span class="stat-val" id="ppg1_max">--</span></div><div class="stat"><span class="stat-label">Mínimo</span><span class="stat-val" id="ppg1_min">--</span></div><div class="stat"><span class="stat-label">Vpp</span><span class="stat-val" id="ppg1_vpp">--</span></div></div>
+        <div class="ch-l"><canvas id="ppg1"></canvas></div></div>
+      <div class="card"><h2><span>PPG Índice Derecho</span><button class="cam" onclick="downloadImage('ppg2')">📷</button></h2>
+        <div class="stats"><div class="stat"><span class="stat-label">Máximo</span><span class="stat-val" id="ppg2_max">--</span></div><div class="stat"><span class="stat-label">Mínimo</span><span class="stat-val" id="ppg2_min">--</span></div><div class="stat"><span class="stat-label">Vpp</span><span class="stat-val" id="ppg2_vpp">--</span></div></div>
+        <div class="ch-l"><canvas id="ppg2"></canvas></div></div>
+    </div>
+
+    <div id="ppg_pies" class="panel" style="display:none">
+      <div class="card"><h2><span>PPG Hallux Izquierdo</span><button class="cam" onclick="downloadImage('ppg3')">📷</button></h2>
+        <div class="stats"><div class="stat"><span class="stat-label">Máximo</span><span class="stat-val" id="ppg3_max">--</span></div><div class="stat"><span class="stat-label">Mínimo</span><span class="stat-val" id="ppg3_min">--</span></div><div class="stat"><span class="stat-label">Vpp</span><span class="stat-val" id="ppg3_vpp">--</span></div></div>
+        <div class="ch-l"><canvas id="ppg3"></canvas></div></div>
+      <div class="card"><h2><span>PPG Hallux Derecho</span><button class="cam" onclick="downloadImage('ppg4')">📷</button></h2>
+        <div class="stats"><div class="stat"><span class="stat-label">Máximo</span><span class="stat-val" id="ppg4_max">--</span></div><div class="stat"><span class="stat-label">Mínimo</span><span class="stat-val" id="ppg4_min">--</span></div><div class="stat"><span class="stat-label">Vpp</span><span class="stat-val" id="ppg4_vpp">--</span></div></div>
+        <div class="ch-l"><canvas id="ppg4"></canvas></div></div>
+    </div>
+
+    <div id="comp_manos" class="panel" style="display:none">
+      <div class="card"><h2><span>Comparativa Manos</span><button class="cam" onclick="downloadImage('compareManos')">📷</button></h2>
+        <div class="stats"><div class="stat"><span class="stat-label">Δ MÁX</span><span class="stat-val" id="comp_manos_max_diff">--</span></div><div class="stat"><span class="stat-label">Δ PROM</span><span class="stat-val" id="comp_manos_avg_diff">--</span></div></div>
+        <div class="ch-l"><canvas id="compareManos"></canvas></div></div>
+    </div>
+
+    <div id="comp_pies" class="panel" style="display:none">
+      <div class="card"><h2><span>Comparativa Pies</span><button class="cam" onclick="downloadImage('comparePies')">📷</button></h2>
+        <div class="stats"><div class="stat"><span class="stat-label">Δ MÁX</span><span class="stat-val" id="comp_pies_max_diff">--</span></div><div class="stat"><span class="stat-label">Δ PROM</span><span class="stat-val" id="comp_pies_avg_diff">--</span></div></div>
+        <div class="ch-l"><canvas id="comparePies"></canvas></div></div>
+    </div>
+
+    <div id="all_view" class="panel" style="display:none">
+      <h2 style="border:none">Resumen Clínico</h2>
+      <div class="grid">
+        <div class="card"><h2><span>ECG</span><button class="cam" onclick="downloadImage('all_c1')">📷</button></h2><div class="ch"><canvas id="all_c1"></canvas></div></div>
+        <div class="card"><h2><span>PPG Ind Izq</span><button class="cam" onclick="downloadImage('all_c2')">📷</button></h2><div class="ch"><canvas id="all_c2"></canvas></div></div>
+        <div class="card"><h2><span>PPG Ind Der</span><button class="cam" onclick="downloadImage('all_c3')">📷</button></h2><div class="ch"><canvas id="all_c3"></canvas></div></div>
+        <div class="card"><h2><span>PPG Pie Izq</span><button class="cam" onclick="downloadImage('all_c4')">📷</button></h2><div class="ch"><canvas id="all_c4"></canvas></div></div>
+        <div class="card"><h2><span>PPG Pie Der</span><button class="cam" onclick="downloadImage('all_c5')">📷</button></h2><div class="ch"><canvas id="all_c5"></canvas></div></div>
+      </div>
+    </div>
+
+    <div id="ppg_view" class="panel" style="display:none">
+      <h2 style="border:none">Monitor PPG (4 Canales)</h2>
+      <div class="grid">
+        <div class="card"><h2><span>PPG Índice Izq</span><button class="cam" onclick="downloadImage('ppg_only_c2')">📷</button></h2><div class="ch"><canvas id="ppg_only_c2"></canvas></div></div>
+        <div class="card"><h2><span>PPG Índice Der</span><button class="cam" onclick="downloadImage('ppg_only_c3')">📷</button></h2><div class="ch"><canvas id="ppg_only_c3"></canvas></div></div>
+        <div class="card"><h2><span>PPG Hallux Izq</span><button class="cam" onclick="downloadImage('ppg_only_c4')">📷</button></h2><div class="ch"><canvas id="ppg_only_c4"></canvas></div></div>
+        <div class="card"><h2><span>PPG Hallux Der</span><button class="cam" onclick="downloadImage('ppg_only_c5')">📷</button></h2><div class="ch"><canvas id="ppg_only_c5"></canvas></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============ CONFIGURACIÓN ============
+   MODO:  'auto'     -> intenta Firebase; si falla o no hay datos, usa simulación (respaldo)
+          'firebase' -> solo Firebase
+          'sim'      -> solo simulación
+   También se puede forzar desde la URL:  ?sim=1  (simulación)  o  ?live=1  (firebase)
+==========================================*/
+let MODO = 'auto';
+const FIREBASE_URL = 'https://practicumii-a9956-default-rtdb.firebaseio.com/ad7606.json';
+const SAMPLE_RATE = 200;
+const SECONDS_TO_SHOW = 15;
+const BUFFER_SIZE = SAMPLE_RATE * SECONDS_TO_SHOW;
+
+const qs = new URLSearchParams(location.search);
+if (qs.has('sim')) MODO = 'sim';
+if (qs.has('live')) MODO = 'firebase';
+
+let charts = {}, globalData = {};
+
+/* ---------- Protocolo ---------- */
+const PASOS = [
+ ['Alimentación','Conecte el dispositivo a un enchufe eléctrico.'],
+ ['Encendido','Encienda el switch de baterías y el de alimentación.'],
+ ['Periféricos','Conecte HDMI, Mouse y Teclado a las entradas del dispositivo.'],
+ ['Interfaz','Espere a que cargue el sistema.'],
+ ['Internet','En el ícono de Wi-fi en la esquina superior derecha conéctese a una red, o en caso de no tener acceso puede conectar un cable LAN al lado del puerto USB.'],
+ ['Terminal','Abra la terminal situada en la esquina superior izquierda.'],
+ ['Ruta','Escriba: <b>cd Desktop/EAP</b> y presione enter.'],
+ ['Paciente','Coloque electrodos y dedales según manual de usuario.'],
+ ['Ejecutar','Escriba seguido en la terminal: <b>python3 eap.py</b> y presione enter.'],
+ ['Medir','Adquiera datos mínimo durante 15 segundos, luego presione "detener".'],
+ ['Confirmación','Verifique mensaje de transferencia exitosa. En caso de recibir mensaje de error, verificar conexión a internet.'],
+ ['Refrescar','Actualice esta página para ver los nuevos datos.'],
+ ['Datos','Presionar el botón CSV en la esquina superior derecha de la página en caso de querer descargar los datos adquiridos en formato excel.'],
+ ['Imágenes','Presionar el símbolo de la cámara en la esquina superior derecha de las gráficas que se deseen descargar.']
+];
+document.getElementById('stepsBox').innerHTML = PASOS.map((p,i)=>
+ `<div class="step"><div class="step-h"><div class="num">${String(i+1).padStart(2,'0')}</div><div class="step-t">${p[0]}</div></div><div class="step-d">${p[1]}</div></div>`).join('');
+
+/* ---------- Reloj ---------- */
+setInterval(()=>{const t=new Date().toLocaleTimeString('es-MX');
+ document.getElementById('sessionTime').innerText=t;document.getElementById('headerClock').innerText=t;},1000);
+
+/* ---------- Fondo blanco para descargas ---------- */
+Chart.register({id:'bgWhite',beforeDraw:(c)=>{const x=c.ctx;x.save();x.globalCompositeOperation='destination-over';x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.restore();}});
+
+function showPanel(id,btn){
+  document.querySelectorAll('.panel').forEach(p=>p.style.display='none');
+  document.getElementById(id).style.display='block';
+  if(btn){document.querySelectorAll('.menu button').forEach(b=>b.classList.remove('active'));btn.classList.add('active');}
+  if(window.innerWidth<=768)document.getElementById('sidebar').classList.remove('open');
+}
+
+/* ============ SIMULADOR DE SEÑALES ============ */
+const gauss=(x,mu,s,a)=>a*Math.exp(-((x-mu)*(x-mu))/(2*s*s));
+function randn(){return (Math.random()+Math.random()+Math.random()+Math.random()-2)*0.8;}
+
+// Instantes de latido (con variabilidad de frecuencia cardiaca + respiración)
+function beatTimes(hr){
+  const beats=[];let t=-1;
+  while(t<SECONDS_TO_SHOW+1.5){
+    beats.push(t);
+    const rr=60/hr*(1+0.04*Math.sin(2*Math.PI*0.25*t)+0.015*randn());
+    t+=rr;
+  }
+  return beats;
+}
+
+// ECG: complejo P-Q-R-S-T por latido + deriva de línea base + ruido
+function simECG(beats){
+  const out=new Array(BUFFER_SIZE);
+  for(let i=0;i<BUFFER_SIZE;i++){
+    const t=i/SAMPLE_RATE;let v=0;
+    for(const b of beats){
+      const x=t-b; if(x<-0.4||x>0.7)continue;
+      v+=gauss(x,-0.20,0.025,0.12)   // P
+        +gauss(x,-0.040,0.010,-0.12) // Q
+        +gauss(x, 0.000,0.012,1.00)  // R
+        +gauss(x, 0.040,0.012,-0.22) // S
+        +gauss(x, 0.260,0.045,0.30); // T
+    }
+    v+=0.04*Math.sin(2*Math.PI*0.2*t)+0.012*randn()+0.008*Math.sin(2*Math.PI*60*t); // deriva + ruido + 60 Hz
+    out[i]=1.65+v; // offset típico de ADC
+  }
+  return out;
+}
+
+// PPG: pulso sistólico + onda dicrótica, con retardo respecto al ECG (tiempo de tránsito)
+// delay: retardo (s) | amp: amplitud | w: ensanchamiento (pies más suaves) | dicro: onda dicrótica
+function simPPG(beats,{delay,amp,w,dicro,dc,noise,resp}){
+  const out=new Array(BUFFER_SIZE);
+  for(let i=0;i<BUFFER_SIZE;i++){
+    const t=i/SAMPLE_RATE;let v=0;
+    for(const b of beats){
+      const x=t-(b+delay); if(x<-0.2||x>1.1)continue;
+      v+=gauss(x,0.12*w,0.065*w,1)+gauss(x,0.38*w,0.10*w,dicro);
+    }
+    const mod=1+resp*Math.sin(2*Math.PI*0.25*t); // modulación respiratoria
+    out[i]=dc+amp*v*mod+0.03*Math.sin(2*Math.PI*0.1*t)+noise*randn();
+  }
+  return out;
+}
+
+function generarSimulacion(){
+  const hr=68+Math.random()*10;           // 68–78 lpm
+  const beats=beatTimes(hr);
+  return {
+    CH1:simECG(beats),
+    // MANOS: tránsito corto, pulso afilado, buena amplitud, dicrótica visible
+    CH2:simPPG(beats,{delay:0.16,amp:0.60,w:1.00,dicro:0.38,dc:1.80,noise:0.004,resp:0.05}),
+    CH3:simPPG(beats,{delay:0.17,amp:0.56,w:1.02,dicro:0.36,dc:1.78,noise:0.004,resp:0.05}),
+    // PIES: tránsito largo, pulso más ancho y amortiguado, menor amplitud, más ruido
+    CH4:simPPG(beats,{delay:0.27,amp:0.32,w:1.35,dicro:0.15,dc:1.55,noise:0.007,resp:0.08}),
+    CH5:simPPG(beats,{delay:0.29,amp:0.29,w:1.40,dicro:0.12,dc:1.52,noise:0.007,resp:0.08})
+  };
+}
+
+/* ============ UTILIDADES ============ */
+function downloadImage(id){
+  const nombres={ecgChart:'senal_ecg',ppg1:'ppg_indice_izquierdo',ppg2:'ppg_indice_derecho',ppg3:'ppg_hallux_izquierdo',ppg4:'ppg_hallux_derecho',compareManos:'comparacion_manos',comparePies:'comparacion_pies',all_c1:'ecg_general',all_c2:'ppg_indice_izq_general',all_c3:'ppg_indice_der_general',all_c4:'ppg_hallux_izq_general',all_c5:'ppg_hallux_der_general',ppg_only_c2:'ppg_indice_izq_vista_ppg',ppg_only_c3:'ppg_indice_der_vista_ppg',ppg_only_c4:'ppg_hallux_izq_vista_ppg',ppg_only_c5:'ppg_hallux_der_vista_ppg'};
+  const a=document.createElement('a');
+  a.download=(nombres[id]||'grafica')+'.png';
+  a.href=document.getElementById(id).toDataURL('image/png');a.click();
+}
+
+function downloadCSV(){
+  if(!globalData.CH1){alert('Cargando datos...');return;}
+  let csv='Tiempo(s),ECG,PPG_Ind_Izq,PPG_Ind_Der,PPG_Pie_Izq,PPG_Pie_Der\r\n';
+  for(let i=0;i<globalData.CH1.length;i++){
+    csv+=[(i/SAMPLE_RATE).toFixed(3),globalData.CH1[i],globalData.CH2[i],globalData.CH3[i],globalData.CH4[i],globalData.CH5[i]].join(',')+'\r\n';
+  }
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='registro_clinico_'+Date.now()+'.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+}
+
+function updateStats(p,d){
+  if(!d||!d.length)return;
+  let mx=-Infinity,mn=Infinity;
+  for(const v of d){if(v>mx)mx=v;if(v<mn)mn=v;}
+  const set=(k,v)=>{const e=document.getElementById(p+'_'+k);if(e)e.innerText=v.toFixed(3);};
+  set('max',mx);set('min',mn);set('vpp',mx-mn);
+}
+
+function updateComparisonStats(p,a,b){
+  if(!a||!b||!a.length||!b.length)return;
+  const n=Math.min(a.length,b.length);let mx=0,tot=0;
+  for(let i=0;i<n;i++){const d=Math.abs(a[i]-b[i]);if(d>mx)mx=d;tot+=d;}
+  document.getElementById(p+'_max_diff').innerText=mx.toFixed(3);
+  document.getElementById(p+'_avg_diff').innerText=(tot/n).toFixed(3);
+}
+
+const sliceData=a=>a?a.slice(-BUFFER_SIZE):[];
+
+function setBadge(sim){
+  const b=document.getElementById('modeBadge');
+  b.className='badge '+(sim?'sim':'live');
+  b.innerText=sim?'Modo simulación':'Datos en vivo';
+  document.getElementById('regenBtn').style.display=sim?'flex':'none';
+}
+
+/* ============ CARGA DE DATOS ============ */
+async function obtenerFirebase(){
+  const res=await fetch(FIREBASE_URL);
+  const d=await res.json();
+  if(!d||!d.CH1||d.CH1.length<10)throw new Error('Firebase sin datos');
+  return {CH1:sliceData(d.CH1),CH2:sliceData(d.CH2),CH3:sliceData(d.CH3),CH4:sliceData(d.CH4),CH5:sliceData(d.CH5)};
+}
+
+async function loadData(){
+  let datos=null,simulado=false;
+  if(MODO!=='sim'){
+    try{datos=await obtenerFirebase();}
+    catch(e){console.warn('Firebase no disponible:',e.message);}
+  }
+  if(!datos&&MODO!=='firebase'){datos=generarSimulacion();simulado=true;}
+  if(!datos){setBadge(false);document.getElementById('modeBadge').innerText='Sin datos';return;}
+  setBadge(simulado);
+  dibujar(datos);
+}
+function regenerate(){dibujar(generarSimulacion());}
+
+function dibujar(d){
+  globalData=d;
+  const {CH1:ecg,CH2:p1,CH3:p2,CH4:p3,CH5:p4}=d;
+  updateStats('ecg',ecg);updateStats('ppg1',p1);updateStats('ppg2',p2);updateStats('ppg3',p3);updateStats('ppg4',p4);
+  updateComparisonStats('comp_manos',p1,p2);updateComparisonStats('comp_pies',p3,p4);
+
+  const L=Array.from({length:ecg.length},(_,i)=>i/SAMPLE_RATE);
+  const cE='#319ed4',c1='#2362ab',c2='#8a8bd6',c3='#4e4589',c4='#2e9696';
+  const S=(l,data,color)=>[{label:l,data,color}];
+
+  renderChart('ecgChart',L,S('ECG',ecg,cE));
+  renderChart('ppg1',L,S('Índice Izq',p1,c1));renderChart('ppg2',L,S('Índice Der',p2,c2));
+  renderChart('ppg3',L,S('Hallux Izq',p3,c3));renderChart('ppg4',L,S('Hallux Der',p4,c4));
+  renderChart('compareManos',L,[...S('Índice Izq',p1,c1),...S('Índice Der',p2,c2)]);
+  renderChart('comparePies',L,[...S('Hallux Izq',p3,c3),...S('Hallux Der',p4,c4)]);
+  renderChart('all_c1',L,S('ECG',ecg,cE));renderChart('all_c2',L,S('Índice Izq',p1,c1));renderChart('all_c3',L,S('Índice Der',p2,c2));
+  renderChart('all_c4',L,S('Hallux Izq',p3,c3));renderChart('all_c5',L,S('Hallux Der',p4,c4));
+  renderChart('ppg_only_c2',L,S('Índice Izq',p1,c1));renderChart('ppg_only_c3',L,S('Índice Der',p2,c2));
+  renderChart('ppg_only_c4',L,S('Hallux Izq',p3,c3));renderChart('ppg_only_c5',L,S('Hallux Der',p4,c4));
+}
+
+function renderChart(id,labels,datasets){
+  const ctx=document.getElementById(id).getContext('2d');
+  if(charts[id])charts[id].destroy();
+  charts[id]=new Chart(ctx,{
+    type:'line',
+    data:{labels,datasets:datasets.map(d=>({label:d.label,data:d.data,borderColor:d.color,backgroundColor:d.color,borderWidth:1.5,pointRadius:0,fill:false,tension:0.1,pointHoverRadius:4}))},
+    options:{
+      responsive:true,maintainAspectRatio:false,animation:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:true,labels:{color:'#374151',font:{size:11}}},
+        tooltip:{backgroundColor:'rgba(255,255,255,.95)',titleColor:'#111827',bodyColor:'#374151',borderColor:'#e5e7eb',borderWidth:1,
+          callbacks:{label:c=>c.dataset.label+': '+c.parsed.y.toFixed(3)+' V'}}
+      },
+      scales:{
+        x:{type:'linear',min:0,max:SECONDS_TO_SHOW,title:{display:true,text:'Tiempo (s)',color:'#6b7280'},ticks:{maxTicksLimit:15,stepSize:1,color:'#6b7280'},grid:{color:'#e5e7eb',borderDash:[2,2]}},
+        y:{title:{display:true,text:'Voltaje (V)',color:'#6b7280'},ticks:{color:'#6b7280'},grid:{color:'#e5e7eb',borderDash:[2,2]}}
+      }
+    }
+  });
+}
+
+loadData();
+</script>
+</body>
+</html>
